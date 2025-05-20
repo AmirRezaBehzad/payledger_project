@@ -20,6 +20,9 @@ from rest_framework.authtoken.views import obtain_auth_token
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('payments.urls')),
     path('api-token-auth/', obtain_auth_token, name='api_token_auth'),
+
+    # Modular and explicit API routing
+    path('api/sellers/', include('sellers.urls')),
+    path('api/payments/', include('payments.urls')),  # Rename from payments if needed
 ]
