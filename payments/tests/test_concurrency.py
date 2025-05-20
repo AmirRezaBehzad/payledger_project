@@ -1,46 +1,42 @@
-# payments/tests/test_concurrency.py
-
+from decimal import Decimal
+from django.urls import reverse
 from django.test import TransactionTestCase
 from rest_framework.test import APIClient
+from rest_framework import status
+from concurrent.futures import ThreadPoolExecutor
 from sellers.models import Seller
-from payments.models import PhoneNumber, CreditRequest
-from threading import Thread
-import time
+from payments.models import PhoneNumber
 
 class TestConcurrency(TransactionTestCase):
-    reset_sequences = True  # Ensures fresh IDs in DB
+    reset_sequences = True  # ensures fresh primary keys
 
     def setUp(self):
-        self.client = APIClient()
-        self.seller = Seller.objects.create_user(username='sellerX', password='passX', phone_number='09999999999')
-        self.phone = PhoneNumber.objects.create(number='09399999999', name='LineX')
+        # Seed a seller with initial balance of 1000
+        self.seller = Seller.objects.create_user(
+            username='sellerX', password='passX', phone_number='09999999999', balance=Decimal('1000.00')
+        )
+        self.phone = PhoneNumber.objects.create(
+            number='09399999999', name='LineX', balance=Decimal('0.00')
+        )
 
-        # Pre-top up balance (single credit)
-        CreditRequest.objects.create(seller=self.seller, amount=1000, status=1, approved_at="2024-01-01", processed=True)
-        self.seller.balance = 1000
-        self.seller.save()
-
-    def charge_phone(self):
+    def _charge_once(self):
+        # each thread uses its own client
         client = APIClient()
         client.force_authenticate(user=self.seller)
-
-        for _ in range(100):  # Each thread will run 100 times
-            client.post("/api/phone-charge/", {
-                "seller": self.seller.id,
-                "phone_number": self.phone.id,
-                "amount": "1.00"
-            }, format='json')
+        url_charge = reverse('phone-charge')
+        resp = client.post(
+            url_charge,
+            {'phone_number': self.phone.id, 'amount': '1.00'},
+            format='json'
+        )
+        assert resp.status_code == status.HTTP_200_OK
 
     def test_concurrent_phone_charging(self):
-        threads = [Thread(target=self.charge_phone) for _ in range(10)]  # 10 threads × 100 = 1000 charges
-
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        # 1000 parallel charges via 50 threads
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            list(executor.map(lambda _: self._charge_once(), range(1000)))
 
         self.seller.refresh_from_db()
         self.phone.refresh_from_db()
-
-        self.assertEqual(float(self.seller.balance), 0.0)
-        self.assertEqual(float(self.phone.balance), 1000.0)
+        self.assertEqual(self.seller.balance, Decimal('0.00'))
+        self.assertEqual(self.phone.balance, Decimal('1000.00'))

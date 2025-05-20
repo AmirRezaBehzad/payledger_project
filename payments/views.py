@@ -1,15 +1,11 @@
-from django.shortcuts import render
 from django.db import transaction
-# Create your views here.
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status
 from django.db import transaction as db_transaction
 from .models import Seller, Transaction, PhoneNumber
 from rest_framework.permissions import IsAuthenticated
-from sellers.serializers import SellerSerializer, SellerRegistrationSerializer
 from .serializers import TransactionSerializer, CreditRequestSerializer, PhoneChargeSerializer
-
 
 class TransactionCreateAPIView(APIView):
     @db_transaction.atomic

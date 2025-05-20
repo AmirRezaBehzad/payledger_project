@@ -1,18 +1,13 @@
 from django.contrib import admin
-from django.utils import timezone
-# Register your models here.
-from django.contrib import admin
-from .models import Seller, Transaction, PhoneNumber, Status
-from django.db import models, transaction
-from .models import CreditRequest
-
-
-# payments/admin.py
-from django.contrib import admin
-from .models import Seller, Transaction, PhoneNumber, CreditRequest, Status
+from .models import Seller, Transaction, PhoneNumber, Status, CreditRequest
 
 # Register Transaction
-admin.site.register(Transaction)
+@admin.register(Transaction)
+class TransactionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'seller', 'amount', 'transaction_type', 'timestamp']
+    list_filter  = ['transaction_type', 'timestamp']
+    search_fields = ['seller__username', 'description']
+    ordering = ['-timestamp']
 
 @admin.register(PhoneNumber)
 class PhoneNumberAdmin(admin.ModelAdmin):
@@ -25,6 +20,7 @@ class CreditRequestAdmin(admin.ModelAdmin):
     list_filter     = ['status', 'processed', 'created_at', 'approved_at']
     readonly_fields = ['created_at', 'approved_at']
     exclude         = ['processed']       # hide the internal flag from the form
+    list_select_related = ('seller',) 
     actions         = ['approve_requests', 'reject_requests', 'set_pending']
 
     def status_label(self, obj):
