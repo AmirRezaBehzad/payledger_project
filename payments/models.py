@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.db import models, transaction
 from django.utils import timezone
 from django.db.models import F
-
+from django.contrib.auth.models import AbstractUser
 
 class Status(models.IntegerChoices):
     PENDING  = 0, 'Pending'
@@ -11,32 +11,30 @@ class Status(models.IntegerChoices):
     REJECTED = 2, 'Rejected'
 
 
-class Seller(models.Model):
+class Seller(AbstractUser):
+    # Inherits username, password, email, is_staff, is_active, etc.
     phone_number = models.CharField(max_length=15, unique=True)
+    # Temporarily allow username & password to be null for clean migrations
+    username     = models.CharField(max_length=150, unique=True)
+    password     = models.CharField(max_length=128)
+
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Seller {self.phone_number} - Balance: {self.balance}"
-
+        return f"Seller {self.username or self.phone_number} - Balance: {self.balance}"
 
 class CreditRequest(models.Model):
-    seller      = models.ForeignKey(
-        Seller,
-        on_delete=models.CASCADE,
-        related_name='credit_requests'
-    )
+    seller      = models.ForeignKey(Seller, on_delete=models.CASCADE, related_name='credit_requests')
     amount      = models.DecimalField(max_digits=12, decimal_places=2)
-    status      = models.IntegerField(
-        choices=Status.choices,
-        default=Status.PENDING,
-    )
+    status      = models.IntegerField(choices=Status.choices, default=Status.PENDING)
     created_at  = models.DateTimeField(auto_now_add=True)
     approved_at = models.DateTimeField(null=True, blank=True)
+    processed   = models.BooleanField(default=False)  # INTERNAL FLAG
 
     def __str__(self):
         return (
-            f"CreditRequest {self.id} for Seller {self.seller.phone_number} "
+            f"CreditRequest {self.id} for Seller {self.seller.username or self.seller.phone_number} "
             f"- Status: {Status(self.status).label}"
         )
 
@@ -44,48 +42,49 @@ class CreditRequest(models.Model):
         if self.status != Status.PENDING:
             raise ValueError("Only pending requests can be approved")
         self.status = Status.APPROVED
-        # approved_at will be set by save()
         self.save()
 
     def reject(self):
         if self.status != Status.PENDING:
             raise ValueError("Only pending requests can be rejected")
-        self.status = Status.REJECTED
+        self.status    = Status.REJECTED
+        self.processed = True   # mark as handled so no future bump
         self.save()
 
     def save(self, *args, **kwargs):
-        # 1) Grab old status (None on first create)
+        # 1) What was the status before?
         old_status = None
         if self.pk:
             old_status = CreditRequest.objects.get(pk=self.pk).status
 
-        # 2) Do the normal save
+        # 2) Persist the new status/fields
         super().save(*args, **kwargs)
 
-        # 3) If we’ve just transitioned into APPROVED for the first time…
-        if (
-            self.status == Status.APPROVED
-            and old_status != Status.APPROVED
-            and self.approved_at is None
-        ):
+        # 3) If PENDING→REJECTED, mark processed so no future bump
+        if old_status == Status.PENDING and self.status == Status.REJECTED and not self.processed:
+            self.processed = True
+            super().save(update_fields=['processed'])
+
+        # 4) Only on first-ever PENDING→APPROVED and not-processed
+        if old_status == Status.PENDING and self.status == Status.APPROVED and not self.processed:
             with transaction.atomic():
-                # a) Lock & bump seller balance
+                # a) bump seller balance
                 seller = Seller.objects.select_for_update().get(pk=self.seller.pk)
                 seller.balance = F('balance') + self.amount
                 seller.save()
 
-                # b) Log the transaction
+                # b) log the transaction
                 Transaction.objects.create(
                     seller=seller,
                     amount=self.amount,
                     transaction_type='credit',
-                    description=f"Admin-approved CreditRequest #{self.id}"
+                    description=f"Approved CreditRequest #{self.id}"
                 )
 
-                # c) Record approved_at to prevent double‐billing
+                # c) stamp approval time + processed flag
                 self.approved_at = timezone.now()
-                super().save(update_fields=['approved_at'])
-
+                self.processed   = True
+                super().save(update_fields=['approved_at', 'processed'])
 
 class Transaction(models.Model):
     TRANSACTION_TYPES = [

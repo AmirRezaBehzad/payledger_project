@@ -1,23 +1,35 @@
 from rest_framework import serializers
 from .models import Seller, Transaction, CreditRequest, PhoneNumber, Status
 
-class SellerSerializer(serializers.ModelSerializer):
-    phone_number = serializers.CharField(
-        max_length=15,
-        min_length=10,
-        required=True,
-        help_text="Phone number should be between 10 and 15 characters."
-    )
-
-    def validate_phone_number(self, value):
-        # Simple check: phone number should be digits only (you can enhance regex if needed)
-        if not value.isdigit():
-            raise serializers.ValidationError("Phone number must contain digits only.")
-        return value
-
+# -----------------------------------------------------------------------------
+# 1) Registration Serializer (for POST /sellers/)
+# -----------------------------------------------------------------------------
+class SellerRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=True)
+    
     class Meta:
         model = Seller
-        fields = ['id', 'phone_number', 'balance', 'created_at']
+        fields = ['id', 'username', 'password', 'phone_number', 'created_at']
+        read_only_fields = ['id', 'created_at']
+    
+    def create(self, validated_data):
+        # Pop off the raw password, set it properly via set_password()
+        password = validated_data.pop('password')
+        seller = Seller(**validated_data)
+        seller.set_password(password)
+        seller.save()
+        return seller
+
+
+# -----------------------------------------------------------------------------
+# 2) Safe Seller Serializer (for GET /sellers/ or GET /sellers/<id>/)
+# -----------------------------------------------------------------------------
+class SellerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Seller
+        # expose username so clients can see who they are
+        fields = ['id', 'username', 'phone_number', 'balance', 'created_at']
+        read_only_fields = ['id', 'balance', 'created_at']
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -41,16 +53,13 @@ class TransactionSerializer(serializers.ModelSerializer):
         return data
 
 class CreditRequestSerializer(serializers.ModelSerializer):
+    status = serializers.IntegerField(read_only=True)
+    approved_at = serializers.DateTimeField(read_only=True)
+
     class Meta:
         model = CreditRequest
-        fields = ['id', 'seller', 'amount', 'created_at', 'approved_at']
-        read_only_fields = ['approved_at']
-
-        def create(self, validated_data):
-            # lookup your “pending” Status object
-            pending = Status.objects.get(name='pending')
-            validated_data['status'] = pending
-            return super().create(validated_data)
+        fields = ['id', 'seller', 'amount', 'status', 'created_at', 'approved_at']
+        read_only_fields = ['status', 'approved_at']
 
 class PhoneNumberSerializer(serializers.ModelSerializer):
     class Meta:
@@ -58,6 +67,22 @@ class PhoneNumberSerializer(serializers.ModelSerializer):
         fields = ['id', 'number', 'name', 'created_at']
 
 class PhoneChargeSerializer(serializers.Serializer):
-    seller = serializers.PrimaryKeyRelatedField(queryset=Seller.objects.all())
+    seller       = serializers.PrimaryKeyRelatedField(queryset=Seller.objects.all())
     phone_number = serializers.PrimaryKeyRelatedField(queryset=PhoneNumber.objects.all())
-    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
+    amount       = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=0.01,               # ensures amount > 0
+        error_messages={'min_value': 'Charge amount must be greater than zero.'}
+    )
+
+    def validate(self, data):
+        """
+        Object-level validation: make sure the seller has enough balance.
+        """
+        seller = data['seller']
+        amount = data['amount']
+        if seller.balance < amount:
+            raise serializers.ValidationError("Insufficient seller balance to perform this charge.")
+        return data
+

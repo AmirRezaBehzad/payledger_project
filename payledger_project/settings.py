@@ -37,11 +37,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
+    'rest_framework.authtoken',
     'rest_framework',
     'payments'
 
 ]
+
+# Use our custom Seller model for authentication
+AUTH_USER_MODEL = 'payments.Seller'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -87,6 +91,17 @@ DATABASES = {
     }
 }
 
+REST_FRAMEWORK = {
+    # 1) Which authentication methods to accept:
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',  # optional, for browsable API
+    ],
+    # 2) Who is allowed in by default:
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
