@@ -40,12 +40,12 @@ INSTALLED_APPS = [
 
     'rest_framework.authtoken',
     'rest_framework',
-    'payments'
-
+    'payments',
+    'sellers'
 ]
 
 # Use our custom Seller model for authentication
-AUTH_USER_MODEL = 'payments.Seller'
+AUTH_USER_MODEL = 'sellers.Seller'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

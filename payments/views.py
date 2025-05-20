@@ -6,9 +6,9 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.db import transaction as db_transaction
 from .models import Seller, Transaction, PhoneNumber
-from .serializers import SellerSerializer, TransactionSerializer, CreditRequestSerializer, PhoneChargeSerializer
 from rest_framework.permissions import IsAuthenticated
-from .serializers import SellerSerializer, SellerRegistrationSerializer
+from sellers.serializers import SellerSerializer, SellerRegistrationSerializer
+from .serializers import TransactionSerializer, CreditRequestSerializer, PhoneChargeSerializer
 
 class SellerListCreateAPIView(APIView):
     # Anyone can register; you could tighten GET with IsAuthenticated if you like
@@ -62,10 +62,12 @@ class TransactionCreateAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class CreditRequestCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = CreditRequestSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()  # Creates request but does not increase balance yet
+            serializer.save(seller=request.user)   # ✅ Inject authenticated user as seller
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -74,31 +76,26 @@ class PhoneChargeAPIView(APIView):
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
-        # 1) Validate input or raise 400
-        serializer = PhoneChargeSerializer(data=request.data)
+        # 1) Validate without passing seller in the body
+        serializer = PhoneChargeSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
 
-        # 2) Extract IDs from validated data
-        seller_id      = serializer.validated_data['seller'].pk
-        phone_id       = serializer.validated_data['phone_number'].pk
-        amount         = serializer.validated_data['amount']
+        phone = PhoneNumber.objects.select_for_update().get(pk=serializer.validated_data['phone_number'].pk)
+        amount = serializer.validated_data['amount']
+        seller = Seller.objects.select_for_update().get(pk=request.user.pk)
 
-        # 3) Lock both rows
-        seller = Seller.objects.select_for_update().get(pk=seller_id)
-        phone  = PhoneNumber.objects.select_for_update().get(pk=phone_id)
-
-        # 4) Double-check balance
+        # 2) Check balance
         if seller.balance < amount:
             return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 5) Move the money
+        # 3) Perform transfer
         seller.balance -= amount
         seller.save(update_fields=['balance'])
 
         phone.balance += amount
         phone.save(update_fields=['balance'])
 
-        # 6) Log the transaction
+        # 4) Log the transaction
         Transaction.objects.create(
             seller=seller,
             amount=amount,
@@ -106,7 +103,7 @@ class PhoneChargeAPIView(APIView):
             description=f"Charged phone {phone.number} ({phone.name or 'no name'})"
         )
 
-        # 7) Return the new balances
+        # 5) Return updated balances
         return Response({
             "message":        "Phone number charged successfully.",
             "seller_balance": str(seller.balance),

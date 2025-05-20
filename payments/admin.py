@@ -11,8 +11,7 @@ from .models import CreditRequest
 from django.contrib import admin
 from .models import Seller, Transaction, PhoneNumber, CreditRequest, Status
 
-# Register Seller and Transaction
-admin.site.register(Seller)
+# Register Transaction
 admin.site.register(Transaction)
 
 @admin.register(PhoneNumber)
