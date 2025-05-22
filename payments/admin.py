@@ -34,6 +34,7 @@ class CreditRequestAdmin(admin.ModelAdmin):
     def approve_requests(self, request, queryset):
         for cr in queryset.select_related('seller'):
             try:
+                # Is it all making sense here?!
                 cr.approve()
                 self.message_user(
                     request,
@@ -67,6 +68,16 @@ class CreditRequestAdmin(admin.ModelAdmin):
         # only on edits:
         if change:
             old = CreditRequest.objects.get(pk=obj.pk)
+
+            # Block any transition from APPROVED or REJECTED → PENDING
+            if old.status in (Status.APPROVED, Status.REJECTED):
+                self.message_user(
+                    request,
+                    "❌ You cannot change the status of a processed request.",
+                    level=messages.ERROR
+                )
+                return  # skip saving entirely
+            
             # PENDING → APPROVED in the form
             if old.status == Status.PENDING and obj.status == Status.APPROVED:
                 try:
@@ -85,6 +96,5 @@ class CreditRequestAdmin(admin.ModelAdmin):
                     self.message_user(request, f"⚠️ Could not reject: {e}", level=messages.ERROR)
                     return
                 return
-
         # fallback to normal create or non‐state‐changing edit
         super().save_model(request, obj, form, change)
