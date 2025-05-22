@@ -50,41 +50,76 @@ class CreditRequestCreateAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+# payments/views.py
+
+from django.db import transaction
+from django.db.models import F
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+from .models import PhoneNumber, Transaction
+from sellers.models import Seller
+from .serializers import PhoneChargeSerializer
+
+# payments/views.py
+
+from django.db import transaction
+from django.db.models import F
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+from .models import PhoneNumber, Transaction
+from sellers.models import Seller
+from .serializers import PhoneChargeSerializer
+
+
 class PhoneChargeAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @transaction.atomic
     def post(self, request, *args, **kwargs):
-        # 1) Validate without passing seller in the body
         serializer = PhoneChargeSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
 
-        phone = PhoneNumber.objects.select_for_update().get(pk=serializer.validated_data['phone_number'].pk)
+        phone = serializer.validated_data['phone_number']
         amount = serializer.validated_data['amount']
-        seller = Seller.objects.select_for_update().get(pk=request.user.pk)
+        seller = request.user
 
-        # 2) Check balance
-        if seller.balance < amount:
-            return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            # Lock the seller row
+            seller_locked = Seller.objects.select_for_update().get(pk=seller.pk)
 
-        # 3) Perform transfer
-        seller.balance -= amount
-        seller.save(update_fields=['balance'])
+            # Ensure sufficient funds
+            if seller_locked.balance < amount:
+                return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
 
-        phone.balance += amount
-        phone.save(update_fields=['balance'])
+            # Lock phone number row
+            phone_locked = PhoneNumber.objects.select_for_update().get(pk=phone.pk)
 
-        # 4) Log the transaction
-        Transaction.objects.create(
-            seller=seller,
-            amount=amount,
-            transaction_type='debit',
-            description=f"Charged phone {phone.number} ({phone.name or 'no name'})"
-        )
+            # Debit seller
+            seller_locked.balance = F('balance') - amount
+            seller_locked.save(update_fields=['balance'])
 
-        # 5) Return updated balances
+            # Credit phone
+            phone_locked.balance = F('balance') + amount
+            phone_locked.save(update_fields=['balance'])
+
+            # Log the transaction
+            Transaction.objects.create(
+                seller=seller_locked,
+                amount=amount,
+                transaction_type='debit',
+                description=f"Charged phone {phone_locked.number}"
+            )
+
+        # Final response with fresh values
+        seller.refresh_from_db()
+        phone.refresh_from_db()
         return Response({
-            "message":        "Phone number charged successfully.",
+            "message": "Phone charged successfully.",
             "seller_balance": str(seller.balance),
-            "phone_balance":  str(phone.balance),
+            "phone_balance": str(phone.balance)
         }, status=status.HTTP_200_OK)

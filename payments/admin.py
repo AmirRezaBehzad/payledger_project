@@ -1,47 +1,90 @@
-from django.contrib import admin
-from .models import Seller, Transaction, PhoneNumber, Status, CreditRequest
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 
-# Register Transaction
+from .models import CreditRequest, Transaction, PhoneNumber, Status
+
+
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'seller', 'amount', 'transaction_type', 'timestamp']
-    list_filter  = ['transaction_type', 'timestamp']
+    list_display  = ['id', 'seller', 'amount', 'transaction_type', 'timestamp']
+    list_filter   = ['transaction_type', 'timestamp']
     search_fields = ['seller__username', 'description']
-    ordering = ['-timestamp']
+    ordering      = ['-timestamp']
+
 
 @admin.register(PhoneNumber)
 class PhoneNumberAdmin(admin.ModelAdmin):
     list_display  = ['id', 'number', 'name', 'balance', 'created_at']
     search_fields = ['number', 'name']
 
+
 @admin.register(CreditRequest)
 class CreditRequestAdmin(admin.ModelAdmin):
-    list_display    = ['id', 'seller', 'amount', 'status_label', 'created_at', 'approved_at']
-    list_filter     = ['status', 'processed', 'created_at', 'approved_at']
-    readonly_fields = ['created_at', 'approved_at']
-    exclude         = ['processed']       # hide the internal flag from the form
-    list_select_related = ('seller',) 
-    actions         = ['approve_requests', 'reject_requests', 'set_pending']
+    list_display        = ('id', 'seller', 'amount', 'status_label', 'created_at', 'processed_at')
+    list_filter         = ('status', 'created_at', 'processed_at')
+    readonly_fields     = ('created_at', 'processed_at')
+    list_select_related = ('seller',)
+    actions             = ('approve_requests', 'reject_requests')
 
+    @admin.display(description='Status')
     def status_label(self, obj):
-        return Status(obj.status).label
-    status_label.short_description = 'Status'
+        return obj.get_status_display()
 
     @admin.action(description="Approve selected credit requests")
     def approve_requests(self, request, queryset):
-        for cr in queryset:
-            cr.status = Status.APPROVED
-            cr.save()  # model.save() handles the first-ever bump
-        self.message_user(request, f"{queryset.count()} request(s) set to Approved.")
+        for cr in queryset.select_related('seller'):
+            try:
+                cr.approve()
+                self.message_user(
+                    request,
+                    f"✅ Approved #{cr.pk} (Seller: {cr.seller.username})",
+                    level=messages.SUCCESS
+                )
+            except ValidationError as e:
+                self.message_user(
+                    request,
+                    f"❌ Could not approve #{cr.pk}: {e}",
+                    level=messages.ERROR
+                )
 
     @admin.action(description="Reject selected credit requests")
     def reject_requests(self, request, queryset):
-        # Mark rejected and processed so no future bump
-        count = queryset.update(status=Status.REJECTED, processed=True)
-        self.message_user(request, f"{count} request(s) set to Rejected.")
+        for cr in queryset.select_related('seller'):
+            try:
+                cr.reject()
+                self.message_user(
+                    request,
+                    f"✅ Rejected #{cr.pk} (Seller: {cr.seller.username})",
+                    level=messages.SUCCESS
+                )
+            except ValidationError as e:
+                self.message_user(
+                    request,
+                    f"❌ Could not reject #{cr.pk}: {e}",
+                    level=messages.ERROR
+                )
+    def save_model(self, request, obj, form, change):
+        # only on edits:
+        if change:
+            old = CreditRequest.objects.get(pk=obj.pk)
+            # PENDING → APPROVED in the form
+            if old.status == Status.PENDING and obj.status == Status.APPROVED:
+                try:
+                    obj.approve()
+                except Exception as e:
+                    self.message_user(request, f"⚠️ Could not approve: {e}", level=messages.ERROR)
+                    return  # skip the normal save
+                # approve() already saved both the bump + status change
+                return
 
-    @admin.action(description="Set selected credit requests to Pending")
-    def set_pending(self, request, queryset):
-        # Bring back to pending; processed remains True if they were rejected before
-        count = queryset.update(status=Status.PENDING)
-        self.message_user(request, f"{count} request(s) set to Pending.")
+            # PENDING → REJECTED in the form
+            if old.status == Status.PENDING and obj.status == Status.REJECTED:
+                try:
+                    obj.reject()
+                except Exception as e:
+                    self.message_user(request, f"⚠️ Could not reject: {e}", level=messages.ERROR)
+                    return
+                return
+
+        # fallback to normal create or non‐state‐changing edit
+        super().save_model(request, obj, form, change)
