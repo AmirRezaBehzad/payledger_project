@@ -1,6 +1,8 @@
 from django.forms import ValidationError
 from rest_framework import serializers
 from .models import Seller, Transaction, CreditRequest, PhoneNumber, Status, PhoneCharge
+from .models import CreditRequest, Status
+from rest_framework.fields import CurrentUserDefault, HiddenField
 
 class TransactionSerializer(serializers.ModelSerializer):
     amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
@@ -23,18 +25,29 @@ class TransactionSerializer(serializers.ModelSerializer):
         return data
 
 class CreditRequestSerializer(serializers.ModelSerializer):
+    # <-- DRF will populate this from request.user automatically
+    seller = HiddenField(default=CurrentUserDefault())
+
     status = serializers.IntegerField(read_only=True)
     approved_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = CreditRequest
-        # fields = ['id', 'seller', 'amount', 'status', 'created_at', 'approved_at']
-        fields = ['id', 'amount', 'status', 'created_at', 'approved_at']
+        fields = ['id', 'seller', 'amount', 'status', 'created_at', 'approved_at']
+        # fields = ['id', 'amount', 'status', 'created_at', 'approved_at']
+        #         fields = [
+        #     'id',
+        #     'seller',       # <<--- add this
+        #     'amount',
+        #     'status',
+        #     'created_at',
+        #     'processed_at',
+        # ]
         read_only_fields = ['status', 'approved_at']
 
-    def create(self, validated_data):
-        seller = self.context['request'].user  # Automatically use the logged-in user
-        return CreditRequest.objects.create(seller=seller, **validated_data)
+    # def create(self, validated_data):
+    #     seller = self.context['request'].user  # Automatically use the logged-in user
+    #     return CreditRequest.objects.create(seller=seller, **validated_data)
 
 class PhoneNumberSerializer(serializers.ModelSerializer):
     class Meta:
@@ -63,20 +76,39 @@ class PhoneNumberSerializer(serializers.ModelSerializer):
 
 # serializers.py
 
+# class PhoneChargeSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = PhoneCharge
+#         fields = ['id', 'phone_number', 'amount', 'created_at']
+#         read_only_fields = ['id','created_at']
+
+#     # def create(self, validated_data):
+#     #     charge = PhoneCharge.objects.create(**validated_data)
+#     #     try:
+#     #         charge.process_charge()
+#     #         return charge
+#     #     except ValidationError as e:
+#     #         charge.delete()
+#     #         raise serializers.ValidationError(str(e))
+#     def create(self, validated_data):
+#         # simply create — do NOT call process_charge here
+#         return PhoneCharge.objects.create(
+#             seller=self.context['request'].user,
+#             **validated_data
+#         )
+    
+from rest_framework import serializers
+from .models import PhoneCharge
+
 class PhoneChargeSerializer(serializers.ModelSerializer):
+    # DRF will put request.user here automatically,
+    # and not include 'seller' in validated_data from the client.
+    seller = serializers.HiddenField(
+        default=serializers.CurrentUserDefault()
+    )
+
     class Meta:
         model = PhoneCharge
-        fields = ['id', 'phone_number', 'amount', 'created_at']
-        read_only_fields = ['id','created_at']
+        fields = ['id', 'seller', 'phone_number', 'amount', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
-    def create(self, validated_data):
-        charge = PhoneCharge.objects.create(
-            seller=self.context['request'].user,
-            **validated_data
-        )
-        try:
-            charge.process_charge()
-            return charge
-        except ValidationError as e:
-            charge.delete()
-            raise serializers.ValidationError(str(e))

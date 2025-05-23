@@ -18,7 +18,7 @@ class CreditRequest(models.Model):
         on_delete=models.CASCADE,
         related_name='credit_requests'
     )
-    amount       = models.DecimalField(max_digits=12, decimal_places=2)
+    amount       = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     status       = models.IntegerField(choices=Status.choices, default=Status.PENDING)
     created_at   = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(null=True, blank=True)
@@ -116,6 +116,23 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_type.capitalize()} {self.amount} for {self.seller.username} at {self.timestamp}"
+    
+    @classmethod
+    @transaction.atomic
+    def create_transaction(cls, seller, amount, ttype, description=None):
+        # lock seller
+        locked = Seller.objects.select_for_update().get(pk=seller.pk)
+        if ttype == 'debit' and locked.balance < amount:
+            raise ValidationError("Insufficient balance")
+        delta = amount if ttype == 'credit' else -amount
+        locked.balance = F('balance') + delta
+        locked.save(update_fields=['balance'])
+        return cls.objects.create(
+            seller=seller,
+            amount=amount,
+            transaction_type=ttype,
+            description=description or ''
+        )
 
 class PhoneNumber(models.Model):
     number     = models.CharField(max_length=15, unique=True)

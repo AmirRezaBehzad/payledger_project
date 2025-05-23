@@ -203,12 +203,13 @@
 #             10000 - n * 100.00
 #         )
 
-    # def test_with_functions(self):
-    #     credit_request = CreditRequest.objects.create(
-    #         seller=self.seller,
-    #         amount=1000
-    #     )
-    #     credit_request.approve()
+#     def test_with_functions(self):
+#         credit_request = CreditRequest.objects.create(
+#             seller=self.seller,
+#             amount=1000
+#         )
+#         credit_request.approve()
+
 import threading
 from django.test import TransactionTestCase
 from django.contrib.auth import get_user_model

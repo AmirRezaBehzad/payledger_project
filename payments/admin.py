@@ -77,7 +77,7 @@ class CreditRequestAdmin(admin.ModelAdmin):
                     "❌ You cannot change the status of a processed request.",
                     level=messages.ERROR
                 )
-                return  # skip saving entirely
+                return
             
             # PENDING → APPROVED in the form
             if old.status == Status.PENDING and obj.status == Status.APPROVED:
@@ -85,8 +85,7 @@ class CreditRequestAdmin(admin.ModelAdmin):
                     obj.approve()
                 except Exception as e:
                     self.message_user(request, f"⚠️ Could not approve: {e}", level=messages.ERROR)
-                    return  # skip the normal save
-                # approve() already saved both the bump + status change
+                    return
                 return
 
             # PENDING → REJECTED in the form
@@ -97,5 +96,4 @@ class CreditRequestAdmin(admin.ModelAdmin):
                     self.message_user(request, f"⚠️ Could not reject: {e}", level=messages.ERROR)
                     return
                 return
-        # fallback to normal create or non‐state‐changing edit
         super().save_model(request, obj, form, change)
