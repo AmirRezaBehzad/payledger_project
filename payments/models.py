@@ -5,6 +5,7 @@ from django.db.models import F, Q
 from sellers.models import Seller
 from decimal import Decimal
 from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
 
 class Status(models.IntegerChoices):
     PENDING  = 0, 'Pending'
@@ -17,22 +18,10 @@ class CreditRequest(models.Model):
         on_delete=models.CASCADE,
         related_name='credit_requests'
     )
-    # Check the validator class!!
-    amount       = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    amount       = models.DecimalField(max_digits=12, decimal_places=2)
     status       = models.IntegerField(choices=Status.choices, default=Status.PENDING)
     created_at   = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [models.Index(fields=['status'])]
-        # Check the constraints is needed!!
-        constraints = [
-            models.CheckConstraint(
-                check=models.Q(amount__gte=Decimal('0.01')),
-                name='creditrequest_amount_positive'
-            ),
-        ]
 
     def __str__(self):
         return f"#{self.pk} by {self.seller.username} — {self.get_status_display()}"
@@ -62,6 +51,30 @@ class CreditRequest(models.Model):
             cr.processed_at = timezone.now()
             cr.save(update_fields=['status', 'processed_at'])
 
+    # def approve(self):
+    #     """Approve a pending request, bump seller.balance, log a Transaction."""
+    #     # cr = CreditRequest.objects.select_for_update().get(pk=self.pk)
+    #     cr = CreditRequest.objects.get(pk=self.pk)
+    #     if cr.status != Status.PENDING:
+    #         raise ValidationError("Cannot approve a non-pending request.")
+
+    #     # bump seller.balance
+    #     seller = Seller.objects.select_for_update().get(pk=cr.seller_id)
+    #     seller.balance = F('balance') + cr.amount
+    #     seller.save(update_fields=['balance'])
+
+    #     # log the Transaction
+    #     Transaction.objects.create(
+    #         seller=seller,
+    #         amount=cr.amount,
+    #         transaction_type='credit',
+    #         description=f"Approved CreditRequest #{cr.pk}"
+    #     )
+    #     # mark as approved
+    #     cr.status       = Status.APPROVED
+    #     cr.processed_at = timezone.now()
+    #     cr.save(update_fields=['status', 'processed_at'])
+
     def reject(self):
         """Reject a pending request (no balance change)."""
         with transaction.atomic():
@@ -72,6 +85,17 @@ class CreditRequest(models.Model):
             cr.status       = Status.REJECTED
             cr.processed_at = timezone.now()
             cr.save(update_fields=['status', 'processed_at'])
+
+
+    # def reject(self):
+    #     """Reject a pending request (no balance change)."""
+    #     cr = CreditRequest.objects.select_for_update().get(pk=self.pk)
+    #     if cr.status != Status.PENDING:
+    #         raise ValidationError("Cannot reject a non-pending request.")
+
+    #     cr.status       = Status.REJECTED
+    #     cr.processed_at = timezone.now()
+    #     cr.save(update_fields=['status', 'processed_at'])
 
 
 class Transaction(models.Model):
@@ -89,14 +113,6 @@ class Transaction(models.Model):
     transaction_type = models.CharField(max_length=6, choices=TRANSACTION_TYPES)
     timestamp        = models.DateTimeField(auto_now_add=True)
     description      = models.TextField(blank=True, null=True)
-
-    class Meta:
-        constraints = [
-            models.CheckConstraint(
-                check=Q(amount__gte=Decimal('0.01')),
-                name='transaction_amount_positive'
-            ),
-        ]
 
     def __str__(self):
         return f"{self.transaction_type.capitalize()} {self.amount} for {self.seller.username} at {self.timestamp}"
@@ -124,21 +140,6 @@ class PhoneCharge(models.Model):
     amount       = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     created_at   = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        ordering = ['-created_at']
-        # Check if these indexes are needed!!
-        indexes = [
-            models.Index(fields=['seller']),
-            models.Index(fields=['phone_number']),
-        ]
-
-        constraints = [
-            models.CheckConstraint(
-                check=Q(amount__gte=Decimal('0.01')),
-                name='phonecharge_amount_positive'
-            ),
-        ]
-
     def __str__(self):
         return f"{self.seller.username} → {self.phone_number.number} ({self.amount})"
 
@@ -159,7 +160,6 @@ class PhoneCharge(models.Model):
             phone.balance = F('balance') + self.amount
             phone.save(update_fields=['balance'])
 
-            from .models import Transaction
             Transaction.objects.create(
                 seller=seller,
                 amount=self.amount,

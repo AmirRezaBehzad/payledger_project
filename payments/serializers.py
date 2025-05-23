@@ -1,5 +1,6 @@
+from django.forms import ValidationError
 from rest_framework import serializers
-from .models import Seller, Transaction, CreditRequest, PhoneNumber, Status
+from .models import Seller, Transaction, CreditRequest, PhoneNumber, Status, PhoneCharge
 
 class TransactionSerializer(serializers.ModelSerializer):
     amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
@@ -31,32 +32,51 @@ class CreditRequestSerializer(serializers.ModelSerializer):
         fields = ['id', 'amount', 'status', 'created_at', 'approved_at']
         read_only_fields = ['status', 'approved_at']
 
-        def create(self, validated_data):
-            seller = self.context['request'].user  # Automatically use the logged-in user
-            return CreditRequest.objects.create(seller=seller, **validated_data)
+    def create(self, validated_data):
+        seller = self.context['request'].user  # Automatically use the logged-in user
+        return CreditRequest.objects.create(seller=seller, **validated_data)
 
 class PhoneNumberSerializer(serializers.ModelSerializer):
     class Meta:
         model = PhoneNumber
         fields = ['id', 'number', 'name', 'created_at']
 
-class PhoneChargeSerializer(serializers.Serializer):
-    # seller       = serializers.PrimaryKeyRelatedField(queryset=Seller.objects.all())
-    phone_number = serializers.PrimaryKeyRelatedField(queryset=PhoneNumber.objects.all())
-    amount       = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        min_value=0.01,               # ensures amount > 0
-        error_messages={'min_value': 'Charge amount must be greater than zero.'}
-    )
+# class PhoneChargeSerializer(serializers.Serializer):
+#     # seller       = serializers.PrimaryKeyRelatedField(queryset=Seller.objects.all())
+#     phone_number = serializers.PrimaryKeyRelatedField(queryset=PhoneNumber.objects.all())
+#     amount       = serializers.DecimalField(
+#         max_digits=12,
+#         decimal_places=2,
+#         min_value=0.01,               # ensures amount > 0
+#         error_messages={'min_value': 'Charge amount must be greater than zero.'}
+#     )
 
-    def validate(self, data):
-        """
-        Object-level validation: make sure the seller has enough balance.
-        """
-        seller = self.context['request'].user
-        amount = data['amount']
-        if seller.balance < amount:
-            raise serializers.ValidationError("Insufficient seller balance to perform this charge.")
-        return data
+#     def validate(self, data):
+#         """
+#         Object-level validation: make sure the seller has enough balance.
+#         """
+#         seller = self.context['request'].user
+#         amount = data['amount']
+#         if seller.balance < amount:
+#             raise serializers.ValidationError("Insufficient seller balance to perform this charge.")
+#         return data
 
+# serializers.py
+
+class PhoneChargeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PhoneCharge
+        fields = ['id', 'phone_number', 'amount', 'created_at']
+        read_only_fields = ['id','created_at']
+
+    def create(self, validated_data):
+        charge = PhoneCharge.objects.create(
+            seller=self.context['request'].user,
+            **validated_data
+        )
+        try:
+            charge.process_charge()
+            return charge
+        except ValidationError as e:
+            charge.delete()
+            raise serializers.ValidationError(str(e))

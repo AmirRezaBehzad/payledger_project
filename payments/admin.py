@@ -64,6 +64,7 @@ class CreditRequestAdmin(admin.ModelAdmin):
                     f"❌ Could not reject #{cr.pk}: {e}",
                     level=messages.ERROR
                 )
+
     def save_model(self, request, obj, form, change):
         # only on edits:
         if change:
