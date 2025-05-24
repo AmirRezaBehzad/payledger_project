@@ -1,17 +1,13 @@
-from django.shortcuts import render
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from sellers.serializers import SellerSerializer, SellerRegistrationSerializer
 from .models import Seller
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .serializers import SellerProfileSerializer
 # Create your views here.
 
 class SellerListCreateAPIView(APIView):
-    # Anyone can register
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
@@ -20,11 +16,10 @@ class SellerListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        # Use the registration serializer that handles set_password()
         serializer = SellerRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         seller = serializer.save()
-        # Return the public representation via SellerSerializer
+
         out = SellerSerializer(seller)
         return Response(out.data, status=status.HTTP_201_CREATED)
     

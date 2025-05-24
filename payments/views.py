@@ -10,14 +10,11 @@ class TransactionCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # 1) grab all transactions, newest first
         qs = Transaction.objects.all().order_by('-timestamp')
 
-        # 2) if the user isn’t staff, restrict to their own
         if not request.user.is_staff:
             qs = qs.filter(seller=request.user)
 
-        # 3) serialize & return
         serializer = TransactionSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -30,8 +27,6 @@ class CreditRequestCreateAPIView(APIView):
         return Response(serializer.data)
     
     def post(self, request):
-        # serializer = CreditRequestSerializer(data=request.data)
-        # after
         serializer = CreditRequestSerializer(
             data=request.data,
             context={'request': request}
@@ -59,10 +54,6 @@ class PhoneChargeAPIView(APIView):
             phone_charge.process_charge()
         except ValidationError as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        # reload to get updated balances
-        phone_charge.seller.refresh_from_db()
-        phone_charge.phone_number.refresh_from_db()
 
         return Response({
             "message":        "Phone charged successfully.",
