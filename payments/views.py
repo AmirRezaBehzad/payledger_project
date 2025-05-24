@@ -8,30 +8,45 @@ from .serializers import TransactionSerializer, CreditRequestSerializer, PhoneCh
 from django.db.models import F
 from django.core.exceptions import ValidationError
 
+# class TransactionCreateAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         serializer = TransactionSerializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+
+#         seller  = serializer.validated_data['seller']
+#         amount  = serializer.validated_data['amount']
+#         ttype   = serializer.validated_data['transaction_type']
+#         desc    = serializer.validated_data.get('description', '')
+
+#         try:
+#             txn = Transaction.create_transaction(
+#                 seller     = seller,
+#                 amount     = amount,
+#                 ttype      = ttype,
+#                 description=desc
+#             )
+#         except ValidationError as e:
+#             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+#         out = TransactionSerializer(txn)
+#         return Response(out.data, status=status.HTTP_201_CREATED)
+
 class TransactionCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        serializer = TransactionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+    def get(self, request):
+        # 1) grab all transactions, newest first
+        qs = Transaction.objects.all().order_by('-timestamp')
 
-        seller  = serializer.validated_data['seller']
-        amount  = serializer.validated_data['amount']
-        ttype   = serializer.validated_data['transaction_type']
-        desc    = serializer.validated_data.get('description', '')
+        # 2) if the user isn’t staff, restrict to their own
+        if not request.user.is_staff:
+            qs = qs.filter(seller=request.user)
 
-        try:
-            txn = Transaction.create_transaction(
-                seller     = seller,
-                amount     = amount,
-                ttype      = ttype,
-                description=desc
-            )
-        except ValidationError as e:
-            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        out = TransactionSerializer(txn)
-        return Response(out.data, status=status.HTTP_201_CREATED)
+        # 3) serialize & return
+        serializer = TransactionSerializer(qs, many=True)
+        return Response(serializer.data)
 
 class CreditRequestCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]

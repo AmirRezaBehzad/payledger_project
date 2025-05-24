@@ -1,8 +1,6 @@
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
-
 from .models import CreditRequest, Transaction, PhoneNumber, Status
-
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
@@ -10,7 +8,6 @@ class TransactionAdmin(admin.ModelAdmin):
     list_filter   = ['transaction_type', 'timestamp']
     search_fields = ['seller__username', 'description']
     ordering      = ['-timestamp']
-
 
 @admin.register(PhoneNumber)
 class PhoneNumberAdmin(admin.ModelAdmin):

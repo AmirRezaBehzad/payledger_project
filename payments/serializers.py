@@ -34,15 +34,6 @@ class CreditRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = CreditRequest
         fields = ['id', 'seller', 'amount', 'status', 'created_at', 'approved_at']
-        # fields = ['id', 'amount', 'status', 'created_at', 'approved_at']
-        #         fields = [
-        #     'id',
-        #     'seller',       # <<--- add this
-        #     'amount',
-        #     'status',
-        #     'created_at',
-        #     'processed_at',
-        # ]
         read_only_fields = ['status', 'approved_at']
 
     # def create(self, validated_data):
