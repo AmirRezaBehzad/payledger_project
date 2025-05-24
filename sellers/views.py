@@ -5,8 +5,9 @@ from rest_framework.views import APIView
 from sellers.serializers import SellerSerializer, SellerRegistrationSerializer
 from .models import Seller
 # Create your views here.
+
 class SellerListCreateAPIView(APIView):
-    # Anyone can register; you could tighten GET with IsAuthenticated if you like
+    # Anyone can register
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):

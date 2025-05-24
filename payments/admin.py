@@ -17,15 +17,16 @@ class PhoneNumberAdmin(admin.ModelAdmin):
 
 @admin.register(CreditRequest)
 class CreditRequestAdmin(admin.ModelAdmin):
-    list_display        = ('id', 'seller', 'amount', 'status_label', 'created_at', 'processed_at')
-    list_filter         = ('status', 'created_at', 'processed_at')
-    readonly_fields     = ('created_at', 'processed_at')
-    list_select_related = ('seller',)
-    actions             = ('approve_requests', 'reject_requests')
+    list_display        = ['id', 'seller', 'amount', 'status', 'created_at', 'processed_at']
+    # list_display        = ['id', 'seller', 'amount', 'status_label', 'created_at', 'processed_at']
+    list_filter         = ['status', 'created_at', 'processed_at']
+    readonly_fields     = ['created_at', 'processed_at']
+    list_select_related = ['seller',]
+    actions             = ['approve_requests', 'reject_requests']
 
-    @admin.display(description='Status')
-    def status_label(self, obj):
-        return obj.get_status_display()
+    # @admin.display(description='Status')
+    # def status_label(self, obj):
+    #     return obj.get_status_display()
 
     @admin.action(description="Approve selected credit requests")
     def approve_requests(self, request, queryset):
@@ -35,13 +36,13 @@ class CreditRequestAdmin(admin.ModelAdmin):
                 cr.approve()
                 self.message_user(
                     request,
-                    f"✅ Approved #{cr.pk} (Seller: {cr.seller.username})",
+                    f" Approved #{cr.pk} (Seller: {cr.seller.username})",
                     level=messages.SUCCESS
                 )
             except ValidationError as e:
                 self.message_user(
                     request,
-                    f"❌ Could not approve #{cr.pk}: {e}",
+                    f" Could not approve #{cr.pk}: {e}",
                     level=messages.ERROR
                 )
 
@@ -52,13 +53,13 @@ class CreditRequestAdmin(admin.ModelAdmin):
                 cr.reject()
                 self.message_user(
                     request,
-                    f"✅ Rejected #{cr.pk} (Seller: {cr.seller.username})",
+                    f" Rejected #{cr.pk} (Seller: {cr.seller.username})",
                     level=messages.SUCCESS
                 )
             except ValidationError as e:
                 self.message_user(
                     request,
-                    f"❌ Could not reject #{cr.pk}: {e}",
+                    f" Could not reject #{cr.pk}: {e}",
                     level=messages.ERROR
                 )
 
@@ -71,7 +72,7 @@ class CreditRequestAdmin(admin.ModelAdmin):
             if old.status in (Status.APPROVED, Status.REJECTED):
                 self.message_user(
                     request,
-                    "❌ You cannot change the status of a processed request.",
+                    " You cannot change the status of a processed request.",
                     level=messages.ERROR
                 )
                 return
@@ -81,7 +82,7 @@ class CreditRequestAdmin(admin.ModelAdmin):
                 try:
                     obj.approve()
                 except Exception as e:
-                    self.message_user(request, f"⚠️ Could not approve: {e}", level=messages.ERROR)
+                    self.message_user(request, f" Could not approve: {e}", level=messages.ERROR)
                     return
                 return
 
@@ -90,7 +91,7 @@ class CreditRequestAdmin(admin.ModelAdmin):
                 try:
                     obj.reject()
                 except Exception as e:
-                    self.message_user(request, f"⚠️ Could not reject: {e}", level=messages.ERROR)
+                    self.message_user(request, f" Could not reject: {e}", level=messages.ERROR)
                     return
                 return
         super().save_model(request, obj, form, change)

@@ -223,7 +223,6 @@ class ConcurrentPhoneChargeFunctionTest(TransactionTestCase):
     Concurrently creates PhoneCharge instances and calls process_charge()
     directly, bypassing the HTTP layer.
     """
-    reset_sequences = True  # make auto‐pks predictable
 
     def setUp(self):
         # 1) Create seller with 1000 in balance, and an empty phone line
@@ -267,7 +266,7 @@ class ConcurrentPhoneChargeFunctionTest(TransactionTestCase):
             t = threading.Thread(target=self._worker, args=(i, results))
             threads.append(t)
             t.start()
-            time.sleep(0.01)  # slight delay to stagger thread starts
+            #time.sleep(0.01)  # slight delay to stagger thread starts
 
         # wait for all to finish
         for t in threads:

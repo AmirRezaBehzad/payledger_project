@@ -11,7 +11,7 @@ class SellerRegistrationSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         password = validated_data.pop('password')
-        seller   = Seller(**validated_data)
+        seller = Seller(**validated_data)
         seller.set_password(password)
         seller.save()
         return seller

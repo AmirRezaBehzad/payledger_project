@@ -1,6 +1,6 @@
 from django.forms import ValidationError
 from rest_framework import serializers
-from .models import Seller, Transaction, CreditRequest, PhoneNumber, Status, PhoneCharge
+from .models import Transaction, CreditRequest, PhoneNumber, PhoneCharge
 from .models import CreditRequest, Status
 from rest_framework.fields import CurrentUserDefault, HiddenField
 
@@ -35,10 +35,6 @@ class CreditRequestSerializer(serializers.ModelSerializer):
         model = CreditRequest
         fields = ['id', 'seller', 'amount', 'status', 'created_at', 'approved_at']
         read_only_fields = ['status', 'approved_at']
-
-    # def create(self, validated_data):
-    #     seller = self.context['request'].user  # Automatically use the logged-in user
-    #     return CreditRequest.objects.create(seller=seller, **validated_data)
 
 class PhoneNumberSerializer(serializers.ModelSerializer):
     class Meta:
@@ -87,9 +83,6 @@ class PhoneNumberSerializer(serializers.ModelSerializer):
 #             seller=self.context['request'].user,
 #             **validated_data
 #         )
-    
-from rest_framework import serializers
-from .models import PhoneCharge
 
 class PhoneChargeSerializer(serializers.ModelSerializer):
     # DRF will put request.user here automatically,
@@ -102,4 +95,3 @@ class PhoneChargeSerializer(serializers.ModelSerializer):
         model = PhoneCharge
         fields = ['id', 'seller', 'phone_number', 'amount', 'created_at']
         read_only_fields = ['id', 'created_at']
-
