@@ -19,5 +19,11 @@ class SellerRegistrationSerializer(serializers.ModelSerializer):
 class SellerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Seller
+        fields = ['id', 'username']
+
+class SellerProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Seller
+        # Include only safe fields, exclude password
         fields = ['id', 'username', 'phone_number', 'balance', 'created_at']
         read_only_fields = ['id', 'balance', 'created_at']

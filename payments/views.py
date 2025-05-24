@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Transaction
+from .models import CreditRequest, PhoneCharge, Transaction
 from rest_framework.permissions import IsAuthenticated
 from .serializers import TransactionSerializer, CreditRequestSerializer, PhoneChargeSerializer
 from django.core.exceptions import ValidationError
@@ -24,6 +24,11 @@ class TransactionCreateAPIView(APIView):
 class CreditRequestCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        qs = CreditRequest.objects.filter(seller=request.user).order_by('-created_at')
+        serializer = CreditRequestSerializer(qs, many=True)
+        return Response(serializer.data)
+    
     def post(self, request):
         # serializer = CreditRequestSerializer(data=request.data)
         # after
@@ -38,6 +43,11 @@ class CreditRequestCreateAPIView(APIView):
     
 class PhoneChargeAPIView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = PhoneCharge.objects.filter(seller=request.user).order_by('-created_at')
+        serializer = PhoneChargeSerializer(qs, many=True)
+        return Response(serializer.data)
 
     def post(self, request):
         serializer = PhoneChargeSerializer(data=request.data, context={'request': request})

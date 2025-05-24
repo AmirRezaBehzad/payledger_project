@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from sellers.serializers import SellerSerializer, SellerRegistrationSerializer
 from .models import Seller
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .serializers import SellerProfileSerializer
 # Create your views here.
 
 class SellerListCreateAPIView(APIView):
@@ -23,3 +27,10 @@ class SellerListCreateAPIView(APIView):
         # Return the public representation via SellerSerializer
         out = SellerSerializer(seller)
         return Response(out.data, status=status.HTTP_201_CREATED)
+    
+class SellerProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = SellerProfileSerializer(request.user)
+        return Response(serializer.data)

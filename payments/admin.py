@@ -1,14 +1,52 @@
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
-from .models import CreditRequest, Transaction, PhoneNumber, Status
+from .models import CreditRequest, PhoneCharge, Transaction, PhoneNumber, Status
+
+# @admin.register(Transaction)
+# class TransactionAdmin(admin.ModelAdmin):
+#     list_display  = ['id', 'seller', 'amount', 'transaction_type', 'timestamp']
+#     list_filter   = ['transaction_type', 'timestamp']
+#     search_fields = ['seller__username', 'description']
+#     ordering      = ['-timestamp']
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
-    list_display  = ['id', 'seller', 'amount', 'transaction_type', 'timestamp']
-    list_filter   = ['transaction_type', 'timestamp']
+    list_display = [
+        'id',
+        'seller_info',
+        'phone_info',
+        'amount',
+        'transaction_type',
+        'timestamp',
+    ]
+    list_filter = ['transaction_type', 'timestamp']
     search_fields = ['seller__username', 'description']
-    ordering      = ['-timestamp']
+    ordering = ['-timestamp']
 
+    def seller_info(self, obj):
+        # Show seller username and current balance
+        return f"{obj.seller.username} - Balance: {obj.seller.balance}"
+    seller_info.short_description = 'Seller'
+
+    def phone_info(self, obj):
+        if obj.transaction_type == 'debit':
+            # For debit transactions, find matching PhoneCharge and show phone number + balance
+            phone_charge = PhoneCharge.objects.filter(
+                seller=obj.seller,
+                amount=obj.amount
+            ).order_by('-created_at').first()
+            if phone_charge:
+                phone = phone_charge.phone_number
+                return f"{phone.number} - Balance: {phone.balance}"
+            else:
+                return "N/A"
+        else:
+            # For credit transactions, phone info not applicable
+            return "-"
+    phone_info.short_description = 'Phone Number'
+
+
+    
 @admin.register(PhoneNumber)
 class PhoneNumberAdmin(admin.ModelAdmin):
     list_display  = ['id', 'number', 'name', 'balance', 'created_at']
