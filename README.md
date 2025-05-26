@@ -2,7 +2,7 @@
 
 **PayLedger** is a Django-based backend application that enables sellers to manage credit requests, phone charging operations, and track all related transactions in a secure and concurrent environment.
 
-## 🚀 Features
+## Features
 
 - Seller registration and authentication (via token-based auth)
 - API endpoints to:
@@ -13,7 +13,7 @@
 - Thread-safe logic for balance updates with concurrent tests
 - Clean and modular Django app structure (`payments`, `sellers`)
 
-## 🛠 Project Structure
+## Project Structure
 
 ```
 payledger_project-main/
@@ -23,7 +23,7 @@ payledger_project-main/
 ├── sellers/                   # Seller model and auth logic
 ```
 
-## ⚙️ Installation
+## Installation
 
 1. **Clone the repository:**
 
@@ -64,7 +64,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-## 🔐 Authentication
+## Authentication
 
 - Token-based authentication is used (`rest_framework.authtoken`).
 - After registering a seller, obtain a token via:
@@ -79,7 +79,7 @@ POST /api-token-auth/
 Authorization: Token <your_token>
 ```
 
-## 🧪 Running Tests
+## Running Tests
 
 Includes concurrency tests using `TransactionTestCase` and `LiveServerTestCase`:
 
@@ -89,7 +89,7 @@ python manage.py test
 
 These tests ensure thread-safe balance updates across concurrent operations like phone charging.
 
-## 📫 API Endpoints
+## API Endpoints
 
 | Method | Endpoint                     | Description                        |
 |--------|------------------------------|------------------------------------|
@@ -99,7 +99,3 @@ These tests ensure thread-safe balance updates across concurrent operations like
 | POST   | /api/payments/phone-charge/  | Charge a phone number              |
 | POST   | /api/payments/credit-requests/ | Create a credit request          |
 | GET    | /api/payments/transactions/  | List transactions for seller       |
-
-## 📝 License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
