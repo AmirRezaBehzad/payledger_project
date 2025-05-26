@@ -5,9 +5,9 @@ from .models import CreditRequest, PhoneCharge, Transaction
 from rest_framework.permissions import IsAuthenticated
 from .serializers import TransactionSerializer, CreditRequestSerializer, PhoneChargeSerializer
 from django.core.exceptions import ValidationError
+from rest_framework import permissions
 
 class TransactionCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         qs = Transaction.objects.all().order_by('-timestamp')
@@ -54,6 +54,10 @@ class PhoneChargeAPIView(APIView):
             phone_charge.process_charge()
         except ValidationError as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # refresh from DB to get updated balances
+        phone_charge.seller.refresh_from_db()
+        phone_charge.phone_number.refresh_from_db()
 
         return Response({
             "message":        "Phone charged successfully.",

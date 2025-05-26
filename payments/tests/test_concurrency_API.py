@@ -21,14 +21,14 @@ class ConcurrentPhoneChargeAPITest(LiveServerTestCase):
             balance=0.00
         )
 
-        # Setup APIClient with token auth
+
         self.client = APIClient()
         
         token, _ = Token.objects.get_or_create(user=self.seller)
         self.client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
 
     def _worker(self, amount, results, index):
-        # Post to the phone-charge endpoint
+
         data = {
             "phone_number": self.phone.id,
             "amount": amount
@@ -41,7 +41,7 @@ class ConcurrentPhoneChargeAPITest(LiveServerTestCase):
 
     def test_concurrent_phone_charges(self):
         num_requests = 100
-        charge_amount = 50.00  # Adjust to ensure total fits within initial balance
+        charge_amount = 50.00  
         results = [None] * num_requests
         
         threads = []
@@ -53,18 +53,15 @@ class ConcurrentPhoneChargeAPITest(LiveServerTestCase):
         for t in threads:
             t.join()
 
-        # Refresh user and phone balances after all charges
         self.seller.refresh_from_db()
         self.phone.refresh_from_db()
 
-        # Check all requests succeeded (HTTP 200)
         success_count = results.count(200)
         failure_count = len([r for r in results if r != 200])
 
         self.assertEqual(success_count, num_requests, f"Expected all {num_requests} successes, got: {results}")
         self.assertEqual(failure_count, 0, f"Failures occurred: {results}")
 
-        # Validate balances: user balance decreased and phone balance increased accordingly
         expected_seller_balance = self.initial_balance - (num_requests * charge_amount)
         expected_phone_balance = num_requests * charge_amount
 

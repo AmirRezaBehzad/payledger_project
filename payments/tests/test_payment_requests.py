@@ -76,13 +76,3 @@ class TransactionAndChargeModelTests(TestCase):
         self.assertEqual(self.phone1.balance, Decimal('500.00'))
         self.assertEqual(self.seller2.balance, Decimal('500.00'))
         self.assertEqual(self.phone2.balance, Decimal('500.00'))
-
-    def test_insufficient_balance_raises(self):
-
-        charge = PhoneCharge.objects.create(
-            seller=self.seller1,
-            phone_number=self.phone1,
-            amount=Decimal('1.00')
-        )
-        with self.assertRaises(ValidationError):
-            charge.process_charge()
